@@ -84,6 +84,7 @@ void *student(void *param)
 	potentialStudent.id = *((int *)param);
 	potentialStudent.section_pref = rand() % 3;
 	potentialStudent.max_wait_time = 10;
+	potentialStudent.type = GS;
 
 	// Sleep the process from 0 - 120 seconds
 	int wakeUpTime = rand() % totalTime;
@@ -118,7 +119,7 @@ void enroll(Student *potentialStudent)
 			// Get the next student
 			remove_from_Queue(GS_students, &GS_front, &GS_rear);
 			// Sleep from 1 to 2 seconds
-			sleep(rand()*2);
+			sleep((rand()%2) + 1);
 			// Add the student to the section if the section
 			// is open
 		}
