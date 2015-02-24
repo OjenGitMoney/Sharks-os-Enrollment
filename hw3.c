@@ -21,10 +21,7 @@ typedef enum{GS, RS, EE} studentType;
 
 int ID_BASE = 100;
 int firstPrint = 1;
-int first_Section[max_in_Section];
 int firstSecCounter = 0;
-int second_Section[max_in_Section];
-int third_Section[max_in_Section];
 int GS_front = -1, RS_front = -1, EE_front = -1;
 int GS_rear = -1, RS_rear = -1, EE_rear = -1;
 time_t startTime;
@@ -36,10 +33,14 @@ time_t startTime;
 	int section_pref;
 	int max_wait_time;
 	int arrival_time;
+	int turn_around_time;
 
  };	typedef struct Student_struct Student;
 
 struct info* Students;
+Student first_Section[max_in_Section];
+int second_Section[max_in_Section];
+int third_Section[max_in_Section];
 Student GS_students[TotalStudents];
 Student RS_students[TotalStudents];
 Student EE_students[TotalStudents];
@@ -75,6 +76,25 @@ int main()
 		pthread_create(&testThreadId, &testThreadAttr, student, &threadId[i]);
 	}
 	pthread_join(stopWatchId, NULL);
+	
+	Student s;
+	printf("\n");
+	printf("Section 1\n");
+	printf("------------------------------------\n");
+	printf("STUDENT | STATUS   | TURN AROUND TIME \n");
+	for(i=0; i<=firstSecCounter; i++)
+	{
+		s = first_Section[i]; 
+		int min=0;
+		int sec = s.turn_around_time;
+		if( sec >= 60)
+		{
+			min++;
+			sec -= 60;
+		}
+		printf("%d     | Enrolled | %1d:%02d\n", s.id, min, sec);
+	}
+		
 	return 0;
 }
 
@@ -87,7 +107,7 @@ void *student(void *param)
 	potentialStudent.type = GS;
 
 	// Sleep the process from 0 - 120 seconds
-	int wakeUpTime = rand() % totalTime;
+	int wakeUpTime = rand() % 5; //totalTime;
 	char event[80];
 	sprintf(event, "Created student %d, now sleep for %d", potentialStudent.id, wakeUpTime);
 	print(event);
@@ -106,42 +126,46 @@ void *student(void *param)
 void enroll(Student *potentialStudent)
 {
 	char event[80];
-	sprintf(event, "Student %d joined the queue", potentialStudent->id);
-	print(event);
 	if(potentialStudent->type == GS)
 	{
+		sprintf(event, "Student %d arrived joined the GS queue", potentialStudent->id);
+		print(event);
 		add_to_Queue(*potentialStudent, GS_students, &GS_front, &GS_rear);
 
 		if(GS_rear == GS_front)
 		{
-			// Signal to all processes that we are removing a student
-			//sem_post();
 			// Get the next student
 			remove_from_Queue(GS_students, &GS_front, &GS_rear);
 			// Sleep from 1 to 2 seconds
 			sleep((rand()%2) + 1);
-			// Add the student to the section if the section
-			// is open
+			sprintf(event, "Student %d was removed from the GS queue", potentialStudent->id);
+			print(event);
 		}
 	}
 
 	pthread_mutex_lock(&secOneMutex);
 	if(potentialStudent->section_pref == 1)
 	{
-		if ((sizeof(first_Section) / 4) <= max_in_Section)
+		if (firstSecCounter <= max_in_Section)
 		{
-			first_Section[firstSecCounter] = potentialStudent->id;
-			firstSecCounter++;
+			time_t now;
+			time(&now);
+			double elapsed = difftime(now, potentialStudent->arrival_time);
+			int turnAroundTime = (int) elapsed;
+
+			potentialStudent->turn_around_time = turnAroundTime;
+			first_Section[firstSecCounter++] = *potentialStudent;
+
+			sprintf(event, "Student %d enrolled in section 1", potentialStudent->id);
+			print(event);
 		}	
 	}
 	pthread_mutex_unlock(&secOneMutex);
-	sprintf(event, "Student %d left the queue", potentialStudent->id);
-	print(event);
 }
 
 void *stopwatch(void *param)
 {
-	sleep(120);
+	sleep(30);
 	char event[80];
 	sprintf(event, "Enrollment is over");
 	print(event);
@@ -205,9 +229,6 @@ void print(char *event)
 
 	// Elapsed time.
 	printf("%1d:%02d | ", min, sec);
-
-	// Which student is currently being processed
-	//printf("%5d |", )
 
 	// What even occurred.
 	printf("%s\n", event);
