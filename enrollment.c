@@ -10,11 +10,10 @@
 
 #define NUM_THREADS     15
 #define Capacity 20
-#define MaxLineLenght 75
+#define MAXLINELENGTH 75
 #define ID_BASE 100
 #define STOPTIME = 120
 
-int counter = 0;
 
 int firstPrint = 1;
 typedef enum {GS, RS, EE} EnumType;
@@ -35,13 +34,14 @@ struct student {
 student Section1[Capacity];     // circular buffer of section1
 student Section2[Capacity];     // circular buffer of section1
 student Section3[Capacity];     // circular buffer of section1
-
+student notEnrolled[MAXLINELENGTH];
+int dropCounter = 0; // Keep track of dropped students
 int NEnrollS1 =0;// initial empty
 int NEnrollS2 =0;// initial empty
 int NEnrollS3 =0;// initial empty
-int LGS[MaxLineLenght];     // circular buffer of line GS
-int LRS[MaxLineLenght];     // circular buffer of line RS
-int LEE[MaxLineLenght];     // circular buffer of line EE
+int LGS[MAXLINELENGTH];     // circular buffer of line GS
+int LRS[MAXLINELENGTH];     // circular buffer of line RS
+int LEE[MAXLINELENGTH];     // circular buffer of line EE
 
 int HGS =0;// initial empty
 int TGS =0;// initial empty
@@ -236,8 +236,18 @@ void SimLineGS()
 {
 	// enroll
   	sem_wait(&gs_sem_go);	
-	sleep(1+rand() % 1);
-	enroll(LGS[HGS++]);
+	static int check = 0;
+	if(TGS > check)
+	{
+		check = TGS;
+		sleep(1+rand() % 1);
+		struct student s = LGS[HGS];
+		if(turnAroundTime(s) > s.patient_time)
+			drop(s);
+		else
+			enroll(s);
+		HGS++;
+	}
 	sem_post(&gs_sem_go);
 	PrintL(0,s); 
 }
@@ -254,8 +264,18 @@ void SimLineRS()
 {
 	// enroll
 	sem_wait(&rs_sem_go);
-	sleep(2+rand() % 2);
-	enroll(LRS[HRS++]);
+	static int check = 0;
+	if(TRS > check)
+	{
+		check = TRS;
+		sleep(2+rand() % 2);
+		struct student s = LRS[HRS];
+		if(turnAroundTime(s) > s.patient_time)
+			drop(s);
+		else
+			enroll(s);
+		HRS++;
+	}
 	sem_post(&rs_sem_go);
 	PrintL(0,s);
 }
@@ -272,8 +292,19 @@ void SimLineEE()
 {
 	// enroll
 	sem_wait(&ee_sem_go);
-	sleep(3+rand() % 3);
-	enroll(LEE[HEE++]);
+	static int check = 0;
+	if (TEE > check) 
+	{
+		check = TEE;
+		sleep(3+rand() % 3);
+		enroll(LEE[HEE++]);
+		struct student s = LRS[HRS];
+		if(turnAroundTime(s) > s.patient_time)
+			drop(s);
+		else
+			enroll(s);
+		HEE++;
+	}
 	sem_post(&ee_sem_go);
 	PrintL(0,s);
 }
@@ -308,6 +339,20 @@ void Terminate()
 		}
 }
 
+// Calculate the turn around time
+int turnAroundTime(struct student s)
+{
+	time_t now;
+	time(&now);
+	double elapsed = difftime(now, s.arrival_time);
+	int turnAroundTime = (int) elapsed;
+	return turnAroundTime;
+}
+
+void drop(struct student s)
+{
+	notEnrolled[dropCounter++] = s;
+}	
 
 void enroll(struct student s)
 {
@@ -317,9 +362,10 @@ void enroll(struct student s)
 		if(NEnrollS1<Capacity )
 		{
 			 pthread_mutex_lock(&S1Mutex);
-			 Section1[NEnrollS1]=s.id;
-		
 			 s.positioninS = NEnrollS1;
+			 s.section_pref = 1;
+			 s.turn_around_time = turnAroundTime(s);
+			 Section1[NEnrollS1]=s;
 			 printf("%d :\n", s.positioninS);
 			 NEnrollS1++;
 			 pthread_mutex_unlock(&S1Mutex);
@@ -335,8 +381,10 @@ void enroll(struct student s)
 		if(NEnrollS2<Capacity)
 		{
 			 pthread_mutex_lock(&S2Mutex);
-			 Section2[NEnrollS2]=s.id;
 			 s.positioninS = NEnrollS2;
+			 s.section_pref = 2;
+			 s.turn_around_time = turnAroundTime(s);
+			 Section2[NEnrollS2]=s;
 			 NEnrollS2++;
 			 pthread_mutex_unlock(&S2Mutex);
 			 if(NEnrollS2==Capacity)
@@ -352,8 +400,10 @@ void enroll(struct student s)
 		if(NEnrollS3<Capacity)
 		{
 			 pthread_mutex_lock(&S3Mutex);
-			 Section3[NEnrollS3]=s.id;
 			 s.positioninS = NEnrollS3;
+			 s.section_pref = 3;
+			 s.turn_around_time = turnAroundTime(s);
+			 Section3[NEnrollS3]=s;
 			 NEnrollS3++;
 			 pthread_mutex_unlock(&S3Mutex);
 			 if(NEnrollS3==Capacity)
